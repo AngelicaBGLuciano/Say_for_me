@@ -108,7 +108,7 @@ Para validar a eficiência dos algoritmos, o aplicativo conta com um módulo de 
 
 | Tela Principal / Prancha | Sistema de Sugestões |
 | :---: | :---: |
-| *[Adicionar Imagem da Prancha aqui]* | *[Adicionar Imagem das Sugestões aqui]* |
+| <img src="assets/print1.jpg" width="300" alt="Tela Principal"/> | <img src="assets/print2.jpg" width="300" alt="Sistema de Sugestões"/> |
 
 ---
 
@@ -138,7 +138,15 @@ flutter pub get
 flutter run -d id_dispositivo
 ```
 ---
+<!--
+## 📦 Download do APK
 
+Se você deseja testar o aplicativo diretamente em um dispositivo Android sem precisar compilar o código fonte, o arquivo executável está disponível para download:
+
+* 📥 **[Baixar o APK do Say for Me (Última Versão)](https://github.com/AngelicaBGLuciano/Say_for_me/releases)**
+
+---
+-->
 ## 📄 Licença
 Este projeto foi desenvolvido estritamente para fins acadêmicos e de pesquisa como Trabalho de Conclusão de Curso (TCC).
 
