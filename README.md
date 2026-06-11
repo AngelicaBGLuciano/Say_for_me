@@ -108,7 +108,7 @@ Para validar a eficiência dos algoritmos, o aplicativo conta com um módulo de 
 
 | Tela Principal / Prancha | Sistema de Sugestões |
 | :---: | :---: |
-| <img src="assets/print1.jpg" width="300" alt="Tela Principal"/> | <img src="assets/print2.jpg" width="300" alt="Sistema de Sugestões"/> |
+| <img src="assets/print1.jpg" width="300" alt="Tela Principal"/> | <img src="assets/print7.jpg" width="300" alt="Sistema de Sugestões"/> |
 
 ---
 
