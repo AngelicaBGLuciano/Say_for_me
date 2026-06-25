@@ -61,21 +61,32 @@ class PictogramRepository {
   Future<List<BoardItem>> getRootBoardItems() async {
     if (_boardConfig == null) return [];
 
+    final allPictograms = await getAllPictogramsFromDb();
+
+    final Map<String, Pictogram> pictogramMap = {
+      for (final pictogram in allPictograms)
+        pictogram.keyword.toLowerCase().trim(): pictogram,
+    };
+
+    final Map<String, Category> categoryMap = {
+      for (final category in _boardConfig!.allCategories)
+        category.name.toLowerCase().trim(): category,
+    };
+
     final List<BoardItem> rootItems = [];
 
     for (String identifier in _boardConfig!.rootItemIdentifiers) {
       if (identifier.startsWith('cat:')) {
-        final categoryName = identifier.substring(4);
-        final category = _boardConfig!.allCategories.firstWhere(
-          (c) => c.name == categoryName,
-          orElse: () => Category(name: 'Not Found', words: []),
-        );
+        final categoryName = identifier.substring(4).toLowerCase().trim();
+        final category = categoryMap[categoryName];
 
-        if (category.name != 'Not Found') {
+        if (category != null) {
           rootItems.add(category);
         }
       } else {
-        final pictogram = await getPictogram(identifier);
+        final keyword = identifier.toLowerCase().trim();
+        final pictogram = pictogramMap[keyword];
+
         if (pictogram != null) {
           rootItems.add(pictogram);
         }
@@ -122,18 +133,27 @@ class PictogramRepository {
   }
 
   // Retorna lista de pictogramas para o board
-  Future<List<Pictogram>> getPictogramsForBoard(
-      List<String> keywords) async {
-    final pictograms = <Pictogram>[];
+  Future<List<Pictogram>> getPictogramsForBoard(List<String> keywords) async {
+    final allPictograms = await getAllPictogramsFromDb();
+
+    final Map<String, Pictogram> pictogramMap = {
+      for (final pictogram in allPictograms)
+        pictogram.keyword.toLowerCase().trim(): pictogram,
+    };
+
+    final List<Pictogram> result = [];
 
     for (final keyword in keywords) {
-      final pictogram = await getPictogram(keyword);
+      final normalizedKeyword = keyword.toLowerCase().trim();
+
+      final pictogram = pictogramMap[normalizedKeyword];
+
       if (pictogram != null) {
-        pictograms.add(pictogram);
+        result.add(pictogram);
       }
     }
 
-    return pictograms;
+    return result;
   }
 
   // Busca na API (sem salvar)
@@ -170,5 +190,13 @@ class PictogramRepository {
   Future<void> recordPictogramUsage(Pictogram pictogram) async {
     await _databaseService
         .incrementUsageCount(pictogram.keyword);
+  }
+
+  Future<void> updatePictogram(Pictogram pictogram) async {
+    await _databaseService.updatePictogram(pictogram);
+  }
+
+  Future<void> deletePictogram(String keyword) async {
+    await _databaseService.deletePictogram(keyword);
   }
 }

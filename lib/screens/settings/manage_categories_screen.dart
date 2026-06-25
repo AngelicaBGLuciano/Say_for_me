@@ -20,6 +20,8 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
   BoardConfig? _boardConfig;
   bool _isLoading = true;
 
+  List<Pictogram> _uncategorizedPictograms = [];
+
   final List<String> categoryTypes = ['pessoas', 'verbos', 'substantivos', 'descritivo', 'social', 'diversos'];
 
   @override
@@ -30,8 +32,23 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
 
   Future<void> _loadConfig() async {
     setState(() => _isLoading = true);
+
     _boardConfig = await _preferencesService.getBoardConfig();
     _pictogramRepository.updateFullConfig(_boardConfig!);
+
+    final allPictograms = await _pictogramRepository.getAllPictogramsFromDb();
+
+    final wordsInCategories = _boardConfig!.allCategories
+        .expand((category) => category.words)
+        .map((word) => word.toLowerCase().trim())
+        .toSet();
+
+    _uncategorizedPictograms = allPictograms.where((pictogram) {
+      return !wordsInCategories.contains(
+        pictogram.keyword.toLowerCase().trim(),
+      );
+    }).toList();
+
     setState(() => _isLoading = false);
   }
 
@@ -93,30 +110,23 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
   }
 
   void _editCategory(int index) async {
-    final updatedCategory = await Navigator.push<Category>(
+    final updatedConfig = await Navigator.push<BoardConfig>(
       context,
       MaterialPageRoute(
-        builder: (context) => EditCategoryScreen(category: _boardConfig!.allCategories[index]),
+        builder: (context) => EditCategoryScreen(
+          boardConfig: _boardConfig!,
+          categoryIndex: index,
+        ),
       ),
     );
-    
-    if (updatedCategory != null) {
-      final oldCategoryName = _boardConfig!.allCategories[index].name;
-      if (updatedCategory.name != oldCategoryName && 
-          _boardConfig!.allCategories.any((c) => c.name.toLowerCase() == updatedCategory.name.toLowerCase())) {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uma categoria com este nome já existe.')));
-      } else {
-        setState(() {
-          final oldIdentifier = 'cat:$oldCategoryName';
-          final newIdentifier = 'cat:${updatedCategory.name}';
-          final rootIndex = _boardConfig!.rootItemIdentifiers.indexOf(oldIdentifier);
-          if (rootIndex != -1) {
-            _boardConfig!.rootItemIdentifiers[rootIndex] = newIdentifier;
-          }
-          _boardConfig!.allCategories[index] = updatedCategory;
-        });
-        _saveConfig();
-      }
+
+    if (updatedConfig != null) {
+      setState(() {
+        _boardConfig = updatedConfig;
+      });
+
+      await _saveConfig();
+      await _loadConfig();
     }
   }
 
@@ -143,25 +153,64 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: _boardConfig!.allCategories.length,
-              itemBuilder: (context, index) {
-                final category = _boardConfig!.allCategories[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: ListTile(
-                    title: Text(category.name),
-                    leading: const Icon(Icons.folder_open),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () => _removeCategory(index),
-                    ),
-                    onTap: () => _editCategory(index),
-                  ),
-                );
-              },
+      ? const Center(child: CircularProgressIndicator())
+      : ListView(
+          padding: const EdgeInsets.all(8),
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Text(
+                'Categorias',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
+
+            ..._boardConfig!.allCategories.asMap().entries.map((entry) {
+              final index = entry.key;
+              final category = entry.value;
+
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: ListTile(
+                  title: Text(category.name),
+                  leading: const Icon(Icons.folder_open),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => _removeCategory(index),
+                  ),
+                  onTap: () => _editCategory(index),
+                ),
+              );
+            }),
+
+            const SizedBox(height: 16),
+
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Text(
+                'Cards sem pasta',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            if (_uncategorizedPictograms.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Nenhum card sem pasta.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              )
+            else
+              ..._uncategorizedPictograms.map(_buildPictogramListTile),
+          ],
+        ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addCategory,
         tooltip: 'Adicionar Categoria',
@@ -261,6 +310,169 @@ class _ManageCategoriesScreenState extends State<ManageCategoriesScreen> {
             ),
           ],
         ),
+    );
+  }
+
+
+  Future<void> _editPictogram(Pictogram pictogram) async {
+    final nameController = TextEditingController(text: pictogram.keyword);
+
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar card'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(labelText: 'Nome do card'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              final text = nameController.text.trim();
+              if (text.isNotEmpty) Navigator.pop(context, text);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName == null || newName == pictogram.keyword) return;
+
+    final oldKeyword = pictogram.keyword;
+
+    final updated = Pictogram(
+      id: pictogram.id,
+      keyword: newName.toLowerCase().trim(),
+      tags: pictogram.tags,
+      type: pictogram.type,
+      usageCount: pictogram.usageCount,
+      localImagePath: pictogram.localImagePath,
+    );
+
+    await _pictogramRepository.updatePictogram(updated);
+
+    for (final category in _boardConfig!.allCategories) {
+      final index = category.words.indexWhere(
+        (word) => word.toLowerCase().trim() == oldKeyword.toLowerCase().trim(),
+      );
+
+      if (index != -1) {
+        category.words[index] = updated.keyword;
+      }
+    }
+
+    final rootIndex = _boardConfig!.rootItemIdentifiers.indexWhere(
+      (id) => id.toLowerCase().trim() == oldKeyword.toLowerCase().trim(),
+    );
+
+    if (rootIndex != -1) {
+      _boardConfig!.rootItemIdentifiers[rootIndex] = updated.keyword;
+    }
+
+    await _saveConfig();
+    await _loadConfig();
+  }
+  Future<void> _movePictogramToCategory(Pictogram pictogram) async {
+    final chosenCategory = await _showCategoryPickerDialog();
+
+    if (chosenCategory == null) return;
+
+    for (final category in _boardConfig!.allCategories) {
+      category.words.removeWhere(
+        (word) => word.toLowerCase().trim() ==
+            pictogram.keyword.toLowerCase().trim(),
+      );
+    }
+
+    final targetCategory = _boardConfig!.allCategories.firstWhere(
+      (category) => category.name == chosenCategory.name,
+    );
+
+    targetCategory.words.add(pictogram.keyword);
+
+    await _saveConfig();
+    await _loadConfig();
+  }
+
+  Future<void> _deletePictogram(Pictogram pictogram) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Apagar card'),
+        content: Text(
+          'Deseja apagar "${pictogram.keyword}" do vocabulário?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Apagar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    for (final category in _boardConfig!.allCategories) {
+      category.words.removeWhere(
+        (word) => word.toLowerCase().trim() ==
+            pictogram.keyword.toLowerCase().trim(),
+      );
+    }
+
+    _boardConfig!.rootItemIdentifiers.removeWhere(
+      (id) => id.toLowerCase().trim() ==
+          pictogram.keyword.toLowerCase().trim(),
+    );
+
+    await _pictogramRepository.deletePictogram(pictogram.keyword);
+    await _saveConfig();
+    await _loadConfig();
+  }
+
+  Widget _buildPictogramListTile(Pictogram pictogram) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        leading: const Icon(Icons.image_outlined),
+        title: Text(pictogram.keyword),
+        subtitle: Text('Tipo: ${pictogram.type}'),
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'edit') {
+              _editPictogram(pictogram);
+            } else if (value == 'move') {
+              _movePictogramToCategory(pictogram);
+            } else if (value == 'delete') {
+              _deletePictogram(pictogram);
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: 'edit',
+              child: Text('Editar'),
+            ),
+            PopupMenuItem(
+              value: 'move',
+              child: Text('Adicionar/mover de pasta'),
+            ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Text('Apagar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -132,5 +132,26 @@ class DatabaseService {
       [keyword.toLowerCase()],
     );
   }
+
+  Future<void> updatePictogram(Pictogram pictogram) async {
+    final db = await database;
+
+    await db.update(
+      'pictograms',
+      pictogram.toMap(),
+      where: 'id = ?',
+      whereArgs: [pictogram.id],
+    );
+  }
+
+  Future<void> deletePictogram(String keyword) async {
+    final db = await database;
+
+    await db.delete(
+      'pictograms',
+      where: 'keyword = ?',
+      whereArgs: [keyword.toLowerCase().trim()],
+    );
+  }
 }
 

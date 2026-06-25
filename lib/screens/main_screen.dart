@@ -244,11 +244,20 @@ class _MainScreenState extends State<MainScreen> {
   
   void _deleteLastPictogram() {
     if (_selectedPictograms.isNotEmpty) {
-      setState(() => _selectedPictograms.removeLast());
-      _updateSuggestions();
+      setState(() {
+        _selectedPictograms.removeLast();
+
+        if (_selectedPictograms.isEmpty) {
+          _suggestions = [];
+        }
+      });
+
+      if (_selectedPictograms.isNotEmpty) {
+        _updateSuggestions();
+      }
     }
   }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
